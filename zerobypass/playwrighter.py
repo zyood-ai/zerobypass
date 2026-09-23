@@ -18,14 +18,14 @@ class Playwrighter:
         self._page_exists_lock = asyncio.Lock()
 
     async def start(self):
-        await self._check_for_install()
+        if args.browser_data_dir:
+            data_dir = args.browser_data_dir
+        else:
+            data_dir = str(pathlib.Path.home() / ("." + pathlib.Path(__file__).parent.name))
+
+        await self._check_for_install(data_dir)
         try:
             with console.status("[bold blue]Launching Playwright browser...", spinner="earth"):
-                if args.browser_data_dir:
-                    data_dir = args.browser_data_dir
-                else:
-                    data_dir = str(pathlib.Path.home() / ("." + pathlib.Path(__file__).parent.name))
-
                 self.playwright = await async_playwright().start()
                 self.browser = await self.playwright.chromium.launch_persistent_context(
                     user_data_dir=data_dir,
@@ -81,7 +81,11 @@ class Playwrighter:
             return page
 
     @staticmethod
-    async def _check_for_install():
+    async def _check_for_install(data_dir):
+        install_marker = pathlib.Path(data_dir) / ".playwright-chrome-installed"
+        if install_marker.exists():
+            return
+
         # Define the command
         cmd = [sys.executable, "-m", "playwright", "install", "--with-deps", "chrome"]
 
@@ -105,8 +109,8 @@ class Playwrighter:
                 # If there's output, print the success message
                 if stdout.strip() or stderr.strip():
                     console.print("[bold green]✔ Playwright browsers installed successfully![/bold green]")
-                # Use asyncio.sleep instead of time.sleep
-                await asyncio.sleep(1)
+                install_marker.parent.mkdir(parents=True, exist_ok=True)
+                install_marker.touch()
             console.clear()
         except subprocess.CalledProcessError:
             console.print(
